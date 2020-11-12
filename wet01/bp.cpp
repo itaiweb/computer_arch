@@ -96,6 +96,12 @@ void btb::updateFsm(int row, int col, bool taken){
 
 /////////////////////// end classes //////////////////////////////
 
+//////////////////////  helper functions ////////////////////////
+
+unsigned extractTag(uint32_t pc, int tagSize, int btbSize);
+
+////////////////////// end  helper functions ////////////////////////
+
 btb* myBtb;
 
 int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned fsmState,
@@ -105,9 +111,7 @@ int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned f
 }
 
 bool BP_predict(uint32_t pc, uint32_t *dst){
-	uint32_t pcTag = pc >> 2;
-	pcTag = pcTag >> (int)log2<unsigned>(myBtb->btbSize); // TODO: make sure this works.
-	pcTag = pcTag & ((1 << myBtb->tagSize) - 1);
+	uint32_t pcTag = extractTag(pc, myBtb->tagSize, myBtb->btbSize);
 
 	cout << "tag size is: " << myBtb->tagSize << endl;
 	cout << "btb size is: " << myBtb->btbSize << endl;
@@ -125,6 +129,19 @@ void BP_GetStats(SIM_stats *curStats){
 	return;
 }
 
+//////////////////////  helper functions ////////////////////////
 
+unsigned extractTag(uint32_t pc, int tagSize, int btbSize){
+	uint32_t pcTag = pc >> 2;
+	int shiftCnt = 0;
+	while(btbSize != 1){
+		btbSize = btbSize >> 1;
+		shiftCnt++;
+	}
+	pcTag = pcTag >> shiftCnt;
+	pcTag = pcTag & ((1 << myBtb->tagSize) - 1);
+	return pcTag;
+}
 
+////////////////////// end  helper functions ////////////////////////
 
