@@ -6,6 +6,8 @@
 #include <vector>
 #include <math.h>
 
+#define TAKEN 1
+
 using namespace std;
 //////////////// classes ///////////////////
 
@@ -99,6 +101,7 @@ void btb::updateFsm(int row, int col, bool taken){
 //////////////////////  helper functions ////////////////////////
 
 unsigned extractTag(uint32_t pc, int tagSize, int btbSize);
+bool predict(uint32_t pc, unsigned history);
 
 ////////////////////// end  helper functions ////////////////////////
 
@@ -113,11 +116,18 @@ int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned f
 bool BP_predict(uint32_t pc, uint32_t *dst){
 	uint32_t pcTag = extractTag(pc, myBtb->tagSize, myBtb->btbSize);
 
-	cout << "tag size is: " << myBtb->tagSize << endl;
-	cout << "btb size is: " << myBtb->btbSize << endl;
-	printf("0x%X\n", pc);
-	printf("0x%X\n", pcTag);
-
+	for(auto itr = myBtb->btbLines.begin(); itr != myBtb->btbLines.end(); itr++){
+		if(!(itr->tag ^ pcTag)){
+			bool prediction = predict(pc, itr->history);
+			if(prediction == TAKEN){
+				*dst = itr->target;
+			} else {
+				*dst = pc + 4;
+			}
+			return prediction;
+		}
+	}
+	*dst = pc + 4;
 	return false;
 }
 
@@ -141,6 +151,22 @@ unsigned extractTag(uint32_t pc, int tagSize, int btbSize){
 	pcTag = pcTag >> shiftCnt;
 	pcTag = pcTag & ((1 << myBtb->tagSize) - 1);
 	return pcTag;
+}
+
+bool predict(uint32_t pc, unsigned history){
+	if(myBtb->isGlobalHist){
+		if(myBtb->isGlobalTable){
+
+		} else { // local table
+
+		}
+	} else { // local history
+		if(myBtb->isGlobalTable){
+
+		} else { // local table
+
+		}
+	}
 }
 
 ////////////////////// end  helper functions ////////////////////////
