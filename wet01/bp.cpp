@@ -146,8 +146,8 @@ int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned f
 bool BP_predict(uint32_t pc, uint32_t *dst){
 	unsigned btbEntry = findBtbEntry(pc);
 	bitset<32> pcBIN(pc); //REMOVE
-	cout << "pc in binary:    " << pcBIN << endl; //REMOVE
-	printBTB(pc); // REMOVE
+	//cout << "pc in binary:    " << pcBIN << endl; //REMOVE
+	//printBTB(pc); // REMOVE
 	if(isBtbEntryExist(pc)){
 		bool prediction = predict(pc, myBtb->btbLines[btbEntry].history, btbEntry);
 		if(prediction == TAKEN){
@@ -192,6 +192,8 @@ void BP_GetStats(SIM_stats *curStats){
 	curStats->br_num = myBtb->br_num;
 	curStats->flush_num = myBtb->flush_num;
 	curStats->size = calcBtbSize();
+	// free memory
+	delete myBtb;
 	return;
 }
 
@@ -329,8 +331,14 @@ void resetBtbEntry(uint32_t targetPc, unsigned tag, uint32_t pc){
 }
 
 unsigned findBtbEntry(uint32_t pc){
+	int shiftCnt = 0;
+	unsigned btbSize = myBtb->btbSize;
+	while(btbSize != 1){
+		btbSize = btbSize >> 1;
+		shiftCnt++;
+	}
 	unsigned btbEntry = (pc >> 2);
-	btbEntry = (btbEntry & ((1 << (myBtb->btbSize - 1)) - 1));
+	btbEntry = (btbEntry & ((1 << (shiftCnt)) - 1));
 	return btbEntry;
 }
 
@@ -356,22 +364,23 @@ int calcBtbSize(){
 void printBTB(uint32_t pc){ //REMOVE
 	cout << "BTB Table:" << endl;
 	for(auto i = myBtb->btbLines.begin(); i != myBtb->btbLines.end(); i++){
-		bitset<26> tag(i->second.tag);
+		bitset<8> tag(i->second.tag);
 		cout << "-------------------------------------------------------------------------------" << endl;
 		cout << "entry:  " << i->first;
 		cout << "  | tag:  ";
 		cout << tag;
 		bitset<8> hist(i->second.history);
 		cout << "  | history:  " << hist;
+		if(myBtb->isGlobalHist){
+			cout << " (NOT VALID)";
+		}
 		cout << "  | target:  ";
-		printf("0x%X |", i->second.target);
+		printf("0x%X |\n", i->second.target);
 		if(!myBtb->isGlobalTable){
-			if(!myBtb->isGlobalHist){
-				cout << " FSM[" << i->second.history << "] state:  " << myBtb->fsm[i->first][i->second.history] << endl;
+			for(int j = 0; j < (1 << myBtb->historySize); j++){
+				cout << "FSM[" << j << "]=" << myBtb->fsm[i->first][j] << "\n";
 			}
-			else{
-				cout << " FSM state:  " << myBtb->fsm[i->first][myBtb->globalHistory] << endl;	
-			}
+			cout << endl;
 		} else {
 			cout << endl;
 		}
