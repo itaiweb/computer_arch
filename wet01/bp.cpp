@@ -145,7 +145,7 @@ int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned f
 
 bool BP_predict(uint32_t pc, uint32_t *dst){
 	unsigned btbEntry = findBtbEntry(pc);
-	bitset<32> pcBIN(pc); //REMOVE
+	//bitset<32> pcBIN(pc); //REMOVE
 	//cout << "pc in binary:    " << pcBIN << endl; //REMOVE
 	//printBTB(pc); // REMOVE
 	if(isBtbEntryExist(pc)){
@@ -165,7 +165,7 @@ bool BP_predict(uint32_t pc, uint32_t *dst){
 void BP_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 	// for statistics
 	myBtb->br_num++;
-	if(((pred_dst == targetPc) && !taken) || ((pred_dst != targetPc) && taken)){
+	if(((pred_dst != pc + 4) && !taken) || ((pred_dst != targetPc) && taken)){
 		myBtb->flush_num++;
 	}
 	
@@ -175,6 +175,7 @@ void BP_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 		if(myBtb->btbLines[btbEntry].tag != pcTag){
 			resetBtbEntry(targetPc, pcTag, pc); //found entry but with different tag.
 		}
+		myBtb->btbLines[btbEntry].target = targetPc;
 	} else {
 		createBtbEntry(targetPc, pcTag, pc);
 	}
@@ -364,12 +365,12 @@ int calcBtbSize(){
 void printBTB(uint32_t pc){ //REMOVE
 	cout << "BTB Table:" << endl;
 	for(auto i = myBtb->btbLines.begin(); i != myBtb->btbLines.end(); i++){
-		bitset<8> tag(i->second.tag);
+		bitset<2> tag(i->second.tag);
 		cout << "-------------------------------------------------------------------------------" << endl;
 		cout << "entry:  " << i->first;
 		cout << "  | tag:  ";
 		cout << tag;
-		bitset<8> hist(i->second.history);
+		bitset<5> hist(i->second.history);
 		cout << "  | history:  " << hist;
 		if(myBtb->isGlobalHist){
 			cout << " (NOT VALID)";
@@ -438,14 +439,14 @@ void printBTB(uint32_t pc){ //REMOVE
 					cout << "using share lsb:  ";
 					cleanPc = cleanPc & ((1 << myBtb->historySize) - 1);
 					unsigned idx = (cleanPc ^ history);
-					bitset<8> idxBIN(idx);
+					bitset<1> idxBIN(idx);
 					cout << "the fsm xor result is: " << idxBIN << " and the fsm state: " << myBtb->fsm[0][idx] << endl;
 				} else { //using share mid
 					cout << "not using mid:" << endl;
 					cleanPc = (cleanPc >> 14);
 					cleanPc = cleanPc & ((1 << myBtb->historySize) - 1);
 					unsigned idx = (cleanPc ^ history);
-					bitset<8> idxBIN(idx);
+					bitset<1> idxBIN(idx);
 					cout << "the fsm xor result is: " << idxBIN << " and the fsm state: " << myBtb->fsm[0][idx] << endl;
 				}
 			}
