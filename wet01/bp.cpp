@@ -7,9 +7,6 @@
 #include <map>
 #include <math.h>
 
-#include <bitset> //REMOVE
-
-
 #define TAKEN 1
 #define VALID_BIT_SIZE 1
 #define TARGET_PC_SIZE 30
@@ -17,7 +14,9 @@
 using namespace std;
 //////////////// classes ///////////////////
 
-//class btbLine
+// class btbLine:
+// represents a line in the btb table, containing a tag, target and 
+// history bits (in case of local history).
 class btbLine
 {
 public:
@@ -45,6 +44,10 @@ btbLine::~btbLine()
 }
 
 // btb class:
+// represents the btb table.
+// contains all the table parameters.
+// two containers: a map of lines, and a map of fsm.
+// one method that updates fsm.
 class btb
 {	
 public:
@@ -70,6 +73,7 @@ public:
 	//containers:
 	map<unsigned, btbLine> btbLines; // first = btb entry, second = line;
 	map<unsigned, vector<unsigned>> fsm;
+
 	//methods:
 	void updateFsm(int entry, int idx, bool taken);
 
@@ -95,6 +99,7 @@ btb::~btb()
 {
 }
 
+// a method for updating an fsm, according to entry, index, and the taken flag.
 void btb::updateFsm(int entry, int idx, bool taken){
 	if(taken){
 		if(fsm[entry][idx] < 3){
@@ -123,12 +128,13 @@ void updateTable(uint32_t pc, bool taken, uint32_t targetPc);
 void updateGlobalT(uint32_t pc, bool taken, unsigned history);
 unsigned findBtbEntry(uint32_t pc);
 int calcBtbSize();
-void printBTB(uint32_t pc); //REMOVE
 
 ////////////////////// end  helper functions ////////////////////////
 
 btb* myBtb;
 
+// call the btb table constructor.
+// initialize global fsm is the global table option is used.
 int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned fsmState,
 			bool isGlobalHist, bool isGlobalTable, int Shared){
 	myBtb = new btb(btbSize, historySize, tagSize, fsmState, isGlobalHist, isGlobalTable, Shared);
@@ -143,11 +149,9 @@ int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned f
 	return 0;
 }
 
+// we used this function to wrap out main "predict" function.
 bool BP_predict(uint32_t pc, uint32_t *dst){
 	unsigned btbEntry = findBtbEntry(pc);
-	//bitset<32> pcBIN(pc); //REMOVE
-	//cout << "pc in binary:    " << pcBIN << endl; //REMOVE
-	//printBTB(pc); // REMOVE
 	if(isBtbEntryExist(pc)){
 		bool prediction = predict(pc, myBtb->btbLines[btbEntry].history, btbEntry);
 		if(prediction == TAKEN){
@@ -162,6 +166,9 @@ bool BP_predict(uint32_t pc, uint32_t *dst){
 	return false;
 }
 
+// 1. collect statistics.
+// 2. check if entry exists and need to be updated or create a new entry.
+// 3. update history.
 void BP_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 	// for statistics
 	myBtb->br_num++;
@@ -189,10 +196,12 @@ void BP_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 	return;
 }
 
+// assign statistics to struct, calculate size and free memory.
 void BP_GetStats(SIM_stats *curStats){
 	curStats->br_num = myBtb->br_num;
 	curStats->flush_num = myBtb->flush_num;
 	curStats->size = calcBtbSize();
+
 	// free memory
 	delete myBtb;
 	return;
@@ -200,6 +209,8 @@ void BP_GetStats(SIM_stats *curStats){
 
 //////////////////////  helper functions ////////////////////////
 
+// extract the btb entry and tag from pc and check if entry exists.
+// return true or false.
 bool isBtbEntryExist(uint32_t pc){
 	unsigned tag = extractTag(pc, myBtb->tagSize, myBtb->btbSize);
 	bool exist = false;
@@ -212,6 +223,7 @@ bool isBtbEntryExist(uint32_t pc){
 	return exist;
 }
 
+// find the tag bits from pc.
 unsigned extractTag(uint32_t pc, int tagSize, int btbSize){
 	uint32_t pcTag = pc >> 2;
 	int shiftCnt = 0;
@@ -224,6 +236,7 @@ unsigned extractTag(uint32_t pc, int tagSize, int btbSize){
 	return pcTag;
 }
 
+// use helper functions to predict each combination of local and global history and tables.
 bool predict(uint32_t pc, unsigned history, unsigned btbEntry){
 	if(myBtb->isGlobalTable){
 		if(myBtb->isGlobalHist){
@@ -241,6 +254,8 @@ bool predict(uint32_t pc, unsigned history, unsigned btbEntry){
 	return false;
 }
 
+// predict in case of global tables.
+// different case according to share.
 bool predictGlobalT(uint32_t pc, unsigned history){
 	bool prediction = false;
 	unsigned cleanPc = (pc >> 2);
@@ -259,6 +274,7 @@ bool predictGlobalT(uint32_t pc, unsigned history){
 	return prediction;
 }
 
+// return true or false according to fsm state.
 bool getPredictionFromFsmTable(int entry, int idx){
 	int state = myBtb->fsm[entry][idx];
 	if(state ==0 || state == 1){
@@ -267,12 +283,15 @@ bool getPredictionFromFsmTable(int entry, int idx){
 	return true;
 }
 
+// update history bits according to taken flag.
 void updateHistory(unsigned* history, bool taken){
 	*history = ((*history) << 1);
 	*history += taken;
 	*history = ((*history) & ((1 << myBtb->historySize) - 1));
 }
 
+// update the btb table.
+// this function is always called at the end of the BP_Predict.
 void updateTable(uint32_t pc, bool taken, uint32_t targetPc){
 	unsigned btbEntry = findBtbEntry(pc);
 	if(myBtb->isGlobalTable){
@@ -290,6 +309,7 @@ void updateTable(uint32_t pc, bool taken, uint32_t targetPc){
 	}
 }
 
+// helper function to update the btb table in the case of global fsm.
 void updateGlobalT(uint32_t pc, bool taken, unsigned history){
 	unsigned cleanPc = (pc >> 2);
 	if(myBtb->Shared == 0){ // not using share
@@ -306,6 +326,8 @@ void updateGlobalT(uint32_t pc, bool taken, unsigned history){
 	}
 }
 
+// create a new entry in the btb.
+// if local fsm is used, initialize the fsm to the default value.
 void createBtbEntry(uint32_t targetPc, unsigned tag, uint32_t pc){
 	unsigned btbEntry = findBtbEntry(pc);
 	myBtb->btbLines[btbEntry] = btbLine(tag, targetPc);
@@ -319,6 +341,7 @@ void createBtbEntry(uint32_t targetPc, unsigned tag, uint32_t pc){
 	
 }
 
+// reset a btb entry in case of collision between branches.
 void resetBtbEntry(uint32_t targetPc, unsigned tag, uint32_t pc){
 	unsigned btbEntry = findBtbEntry(pc);
 	if(!myBtb->isGlobalTable){
@@ -331,6 +354,7 @@ void resetBtbEntry(uint32_t targetPc, unsigned tag, uint32_t pc){
 	myBtb->btbLines[btbEntry].history = 0;
 }
 
+// return the btb index from a given pc.
 unsigned findBtbEntry(uint32_t pc){
 	int shiftCnt = 0;
 	unsigned btbSize = myBtb->btbSize;
@@ -343,6 +367,7 @@ unsigned findBtbEntry(uint32_t pc){
 	return btbEntry;
 }
 
+// calculate the btb theoretical size.
 int calcBtbSize(){
 	int size = 0;
 	if(myBtb->isGlobalTable){
@@ -362,96 +387,3 @@ int calcBtbSize(){
 }
 
 ////////////////////// end  helper functions ////////////////////////
-void printBTB(uint32_t pc){ //REMOVE
-	cout << "BTB Table:" << endl;
-	for(auto i = myBtb->btbLines.begin(); i != myBtb->btbLines.end(); i++){
-		bitset<2> tag(i->second.tag);
-		cout << "-------------------------------------------------------------------------------" << endl;
-		cout << "entry:  " << i->first;
-		cout << "  | tag:  ";
-		cout << tag;
-		bitset<5> hist(i->second.history);
-		cout << "  | history:  " << hist;
-		if(myBtb->isGlobalHist){
-			cout << " (NOT VALID)";
-		}
-		cout << "  | target:  ";
-		printf("0x%X |\n", i->second.target);
-		if(!myBtb->isGlobalTable){
-			for(int j = 0; j < (1 << myBtb->historySize); j++){
-				cout << "FSM[" << j << "]=" << myBtb->fsm[i->first][j] << "\n";
-			}
-			cout << endl;
-		} else {
-			cout << endl;
-		}
-	}
-	cout << "-------------------------------------------------------------------------------" << endl;
-	if(myBtb->isGlobalHist){
-		bitset<8> x(myBtb->globalHistory);
-		cout << "Global History:" << x << endl;
-		cout << "-------------------------------------------------------------------------------" << endl;
-	}
-
-	unsigned cleanPc = (pc >> 2);
-	if(myBtb->isGlobalTable){
-		cout << "**Global table: " << endl;
-		cout << "\tindex\tstate" << endl;
-		for(int i = 0; i < (1 << myBtb->historySize); i++){
-			cout << "\t  " << i << "   |   " << myBtb->fsm[0][i] << endl;
-		}
-		if(myBtb->isGlobalHist){
-			cout << " #################### FSM #####################" << endl;
-			cout << "global tables and global history:" << endl;
-			if(myBtb->Shared == 0){ // not using share
-				cout << "not using share:" << endl;
-				cout << myBtb->fsm[0][myBtb->globalHistory];
-			} else if(myBtb->Shared == 1) { // using share lsb
-				cout << "using share lsb:  ";
-				cleanPc = cleanPc & ((1 << myBtb->historySize) - 1);
-				unsigned idx = (cleanPc ^ myBtb->globalHistory);
-				bitset<8> idxBIN(idx);
-				cout << "the fsm xor result is: " << idxBIN << " and the fsm state: " << myBtb->fsm[0][idx] << endl;
-			} else { //using share mid
-				cout << "not using mid:" << endl;
-				cleanPc = (cleanPc >> 14);
-				cleanPc = cleanPc & ((1 << myBtb->historySize) - 1);
-				unsigned idx = (cleanPc ^ myBtb->globalHistory);
-				bitset<8> idxBIN(idx);
-				cout << "the fsm xor result is: " << idxBIN << " and the fsm state: " << myBtb->fsm[0][idx] << endl;
-			}	
-		} else { //local history
-			unsigned tag = extractTag(pc, myBtb->tagSize, myBtb->btbSize);
-			bool exist = false;
-			unsigned btbEntry = findBtbEntry(pc);
-			if(myBtb->btbLines.find(btbEntry) != myBtb->btbLines.end()) {
-				if(myBtb->btbLines[btbEntry].tag == tag){
-					exist = true;
-				}
-			}
-			if(exist){
-				unsigned history = myBtb->btbLines[btbEntry].history;
-				cout << "global tables and local history" << endl;
-				if(myBtb->Shared == 0){ // not using share
-					cout << "not using share:" << endl;
-					cout << myBtb->fsm[0][history] << endl;
-				} else if(myBtb->Shared == 1) { // using share lsb
-					cout << "using share lsb:  ";
-					cleanPc = cleanPc & ((1 << myBtb->historySize) - 1);
-					unsigned idx = (cleanPc ^ history);
-					bitset<1> idxBIN(idx);
-					cout << "the fsm xor result is: " << idxBIN << " and the fsm state: " << myBtb->fsm[0][idx] << endl;
-				} else { //using share mid
-					cout << "not using mid:" << endl;
-					cleanPc = (cleanPc >> 14);
-					cleanPc = cleanPc & ((1 << myBtb->historySize) - 1);
-					unsigned idx = (cleanPc ^ history);
-					bitset<1> idxBIN(idx);
-					cout << "the fsm xor result is: " << idxBIN << " and the fsm state: " << myBtb->fsm[0][idx] << endl;
-				}
-			}
-		}
-	}
-	cout << "-----------------------------------------------------------------------" << endl;
-}
-
