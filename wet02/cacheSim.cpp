@@ -4,6 +4,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include "cache.h"
 
 using std::FILE;
 using std::string;
@@ -62,6 +63,21 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	// *** calc caches ***
+	int L1Sets = calcSize(L1Size, BSize, L1Assoc);
+	int L2Sets = calcSize(L2Size, BSize, L2Assoc);
+	// cout << "L1 num of sets: " << L1Sets << "\t L2 num of sets: " << L2Sets << endl;
+	cache L1(L1Assoc, L1Sets);
+	cache L2(L2Assoc, L2Sets);
+	// *** calc caches ***
+
+	int totalCommandCnt = 0; //total num of commands performed
+	int totalCyclesCnt = 0; //total num of cycles in all program
+	int L1Access = 0; //num of access to L1
+	int L2Access = 0; //num of access to L2
+	int L1MissCnt; //num of misses in L1
+	int L2MissCnt; //num of misses in L2
+
 	while (getline(file, line)) {
 
 		stringstream ss(line);
@@ -87,11 +103,55 @@ int main(int argc, char **argv) {
 		// DEBUG - remove this line
 		cout << " (dec) " << num << endl;
 
+		int L1SetNum = (L1Sets - 1) & (num >> BSize);
+		int L2SetNum = (L2Sets - 1) & (num >> BSize);
+		int L1BitNum = BitCalc(L1Sets);
+		int L1TagNum = num >> (BSize + L1BitNum);
+		int L2BitNum =  BitCalc(L2Sets);
+		int L2TagNum = num >> (BSize + L2BitNum);
+
+		// cout << "L1 Tag = " << L1TagNum << "\t L1 set = " << L1SetNum << "\t L2 Tag = " << L2TagNum << "\t L2 set = " << L2SetNum << endl;
+		// ****** do operations
+		if(operation == 'r'){
+			L1Access++;
+			totalCyclesCnt += L1Cyc;
+			bool hit1 = L1.read(L1SetNum, L1TagNum);
+			if(!hit1){
+				L1MissCnt++;
+				L2Access++;
+				totalCyclesCnt += L2Cyc;
+				bool hit2 = L2.read(L2SetNum, L2TagNum);
+				if(!hit2){
+					L2MissCnt++;
+					totalCyclesCnt += MemCyc;
+					if (L2.isLineFull(L2SetNum)){
+						L2.evict(L2SetNum); //writing to memory = just erase the line (valid = 0)
+					}
+					L2.insert(L2SetNum, L2TagNum);
+				}
+				if(L1.isLineFull(L1SetNum)){
+					bool isDirty = L1.evict(L1SetNum);
+					if (isDirty){
+						L2.writeBack(L2SetNum, L2TagNum);
+					}
+				}
+				L1.insert(L1SetNum, L1TagNum);
+			}
+		}
+		else{
+
+		}
+
+	// 	// ****** do operations
+
 	}
 
 	double L1MissRate;
 	double L2MissRate;
 	double avgAccTime;
+
+
+
 
 	printf("L1miss=%.03f ", L1MissRate);
 	printf("L2miss=%.03f ", L2MissRate);
