@@ -99,7 +99,7 @@ void cache::writeBack(int set, int tag){
         line* setLine = lines[set];
         int cnt = 0;
         for(int way = 0; way < _waysNum; way++){
-                if(setLine->waysVec[way].first.first == tag){
+                if((setLine->waysVec[way].first.first == tag) && (setLine->waysVec[way].second)){
                         setLine->waysVec[way].first.second = true;
                         setLine->lruUpdate(way);
                         cnt++;

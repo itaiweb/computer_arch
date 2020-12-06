@@ -66,7 +66,7 @@ int main(int argc, char **argv) {
 	// *** calc caches ***
 	int L1Sets = calcSize(L1Size, BSize, L1Assoc);
 	int L2Sets = calcSize(L2Size, BSize, L2Assoc);
-	cout << "L1 num of sets: " << L1Sets << "\t L2 num of sets: " << L2Sets << endl;
+	//cout << "L1 num of sets: " << L1Sets << "\t L2 num of sets: " << L2Sets << endl;
 	cache L1(L1Assoc, L1Sets);
 	cache L2(L2Assoc, L2Sets);
 	// *** calc caches ***
@@ -118,6 +118,8 @@ int main(int argc, char **argv) {
 			totalCyclesCnt += L1Cyc;
 			bool hit1 = L1.read(L1SetNum, L1TagNum);
 			if(!hit1){
+				cout << "miss L1 read" << endl;
+				cout << "L2 access" << endl;
 				L1MissCnt++;
 				L2Access++;
 				totalCyclesCnt += L2Cyc;
@@ -125,6 +127,7 @@ int main(int argc, char **argv) {
 				if(!hit2){
 					L2MissCnt++;
 					totalCyclesCnt += MemCyc;
+					cout << "miss L2 read" << endl;
 					if (L2.isLineFull(L2SetNum)){
 						L2.evict(L2SetNum, writeBackTagNum); //writing to memory = just erase the line (valid = 0)
 						int L1numTranslate = ((writeBackTagNum << L2BitNum) | L2SetNum) << BSize;
@@ -153,6 +156,7 @@ int main(int argc, char **argv) {
 			bool hit1 = L1.write(L1SetNum, L1TagNum);
 			if(!hit1){
 				L1MissCnt++;
+				cout << "miss L1" << endl;
 				L2Access++;
 				totalCyclesCnt += L2Cyc;
 				if(WrAlloc){
@@ -165,9 +169,10 @@ int main(int argc, char **argv) {
 							L2.writeBack(L2SetTranslate, L2TagTranslate);	
 						}
 					}
-					bool hit2 = L2.isExist(L2SetNum, L2TagNum);
+					bool hit2 = L2.read(L2SetNum, L2TagNum); //!!!!!!!!!!!!!!!!!!!! is_exist
 					if(!hit2){
 						L2MissCnt++;
+						cout << "miss L2 WA" << endl;
 						totalCyclesCnt += MemCyc;
 						if(L2.isLineFull(L2SetNum)){
 							L2.evict(L2SetNum, writeBackTagNum);
@@ -184,9 +189,10 @@ int main(int argc, char **argv) {
 					}
 				}
 				else{//no write allocate
-					bool hit2 = L2.isExist(L2SetNum, L2TagNum);
+					bool hit2 = L2.write(L2SetNum, L2TagNum); //!!!!!!!!!!!!!!!!!!!is_exist
 					if(!hit2){
 						L2MissCnt++;
+						cout << "miss L2 no WA" << endl;
 						totalCyclesCnt += MemCyc;
 					}//write to memory. simulator do nothing
 				}
@@ -204,7 +210,7 @@ int main(int argc, char **argv) {
 	printf("L1miss=%.03f ", L1MissRate);
 	printf("L2miss=%.03f ", L2MissRate);
 	printf("AccTimeAvg=%.03f\n", avgAccTime);
-	L1.~cache();
-	L2.~cache();
+	//L1.~cache();
+	//L2.~cache();
 	return 0;
 }
