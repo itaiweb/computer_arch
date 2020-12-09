@@ -74,9 +74,7 @@ bool cache::evict(int set, int &writeBackTagNum){
         line* setLine = lines[set];
         int wayToEvict = setLine->WayToEvict();
         bool dirty = setLine->waysVec[wayToEvict].first.second;
-        if(dirty){
-                writeBackTagNum = setLine->waysVec[wayToEvict].first.first;
-        }
+        writeBackTagNum = setLine->waysVec[wayToEvict].first.first;
         setLine->waysVec[wayToEvict].second = false;
         return dirty;
 }

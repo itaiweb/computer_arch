@@ -90,18 +90,18 @@ int main(int argc, char **argv) {
 		}
 
 		// DEBUG - remove this line
-		cout << "operation: " << operation;
+		//cout << "operation: " << operation;
 
 		string cutAddress = address.substr(2); // Removing the "0x" part of the address
 
 		// DEBUG - remove this line
-		cout << ", address (hex)" << cutAddress;
+		//cout << ", address (hex)" << cutAddress;
 
 		unsigned long int num = 0;
 		num = strtoul(cutAddress.c_str(), NULL, 16);
 
 		// DEBUG - remove this line
-		cout << " (dec) " << num << endl;
+		//cout << " (dec) " << num << endl;
 
 		int L1SetNum = (L1Sets - 1) & (num >> BSize);
 		int L2SetNum = (L2Sets - 1) & (num >> BSize);
@@ -118,8 +118,8 @@ int main(int argc, char **argv) {
 			totalCyclesCnt += L1Cyc;
 			bool hit1 = L1.read(L1SetNum, L1TagNum);
 			if(!hit1){
-				cout << "miss L1 read" << endl;
-				cout << "L2 access" << endl;
+				//cout << "miss L1 read" << endl;
+				//cout << "L2 access" << endl;
 				L1MissCnt++;
 				L2Access++;
 				totalCyclesCnt += L2Cyc;
@@ -127,7 +127,7 @@ int main(int argc, char **argv) {
 				if(!hit2){
 					L2MissCnt++;
 					totalCyclesCnt += MemCyc;
-					cout << "miss L2 read" << endl;
+					//cout << "miss L2 read" << endl;
 					if (L2.isLineFull(L2SetNum)){
 						L2.evict(L2SetNum, writeBackTagNum); //writing to memory = just erase the line (valid = 0)
 						int L1numTranslate = ((writeBackTagNum << L2BitNum) | L2SetNum) << BSize;
@@ -156,23 +156,15 @@ int main(int argc, char **argv) {
 			bool hit1 = L1.write(L1SetNum, L1TagNum);
 			if(!hit1){
 				L1MissCnt++;
-				cout << "miss L1" << endl;
+				//cout << "miss L1" << endl;
 				L2Access++;
 				totalCyclesCnt += L2Cyc;
 				if(WrAlloc){
-					if(L1.isLineFull(L1SetNum)){
-						bool isDirty = L1.evict(L1SetNum, writeBackTagNum);
-						if(isDirty){
-							int L2numTranslate = ((writeBackTagNum << L1BitNum) | L1SetNum) << BSize;
-							int L2TagTranslate = L2numTranslate >> (BSize + L2BitNum);
-							int L2SetTranslate = (L2Sets - 1) & (L2numTranslate >> BSize);
-							L2.writeBack(L2SetTranslate, L2TagTranslate);	
-						}
-					}
+					
 					bool hit2 = L2.read(L2SetNum, L2TagNum); //!!!!!!!!!!!!!!!!!!!! is_exist
 					if(!hit2){
 						L2MissCnt++;
-						cout << "miss L2 WA" << endl;
+						//cout << "miss L2 WA" << endl;
 						totalCyclesCnt += MemCyc;
 						if(L2.isLineFull(L2SetNum)){
 							L2.evict(L2SetNum, writeBackTagNum);
@@ -183,6 +175,15 @@ int main(int argc, char **argv) {
 						}
 						L2.insert(L2SetNum, L2TagNum);
 					}
+					if(L1.isLineFull(L1SetNum)){
+						bool isDirty = L1.evict(L1SetNum, writeBackTagNum);
+						if(isDirty){
+							int L2numTranslate = ((writeBackTagNum << L1BitNum) | L1SetNum) << BSize;
+							int L2TagTranslate = L2numTranslate >> (BSize + L2BitNum);
+							int L2SetTranslate = (L2Sets - 1) & (L2numTranslate >> BSize);
+							L2.writeBack(L2SetTranslate, L2TagTranslate);	
+						}
+					}
 					L1.insert(L1SetNum, L1TagNum);
 					if(!L1.write(L1SetNum, L1TagNum)){
 						cout << "BUUUGGGG in write op" << endl; //should NOT be printed!
@@ -192,7 +193,7 @@ int main(int argc, char **argv) {
 					bool hit2 = L2.write(L2SetNum, L2TagNum); //!!!!!!!!!!!!!!!!!!!is_exist
 					if(!hit2){
 						L2MissCnt++;
-						cout << "miss L2 no WA" << endl;
+						//cout << "miss L2 no WA" << endl;
 						totalCyclesCnt += MemCyc;
 					}//write to memory. simulator do nothing
 				}
