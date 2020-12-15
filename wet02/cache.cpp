@@ -1,6 +1,7 @@
 #include "cache.h"
 using namespace std;
 
+// line class constructor
 line::line(int waysNum, int set){
         _set = set;
         _waysNum = waysNum;
@@ -12,6 +13,8 @@ line::line(int waysNum, int set){
 
 
 // ******line methods*******
+
+// update line lru according to algorithm from lecture
 void line::lruUpdate(int way){
         int temp = lru[way];
         lru[way] = _waysNum - 1;
@@ -21,17 +24,19 @@ void line::lruUpdate(int way){
                 }
         }
 }
+
+// get the way number to evict the adress from, according to the lru.
 int line::WayToEvict(){
         for(int way = 0; way < _waysNum; way++){
                 if(lru[way] == 0){
                         return way;
                 }
         }
-        cout << "BUGGGGG in wayToEvict" << endl; //shouldnt be printed 
-        return 1;
+        return 0;
 }
-// ******line methods*******
+// ******end line methods*******
 
+// cache class constructor.
 cache::cache(int waysNum, int setsNum){
         _setsNum = setsNum;
         _waysNum = 1 << waysNum;
@@ -39,6 +44,8 @@ cache::cache(int waysNum, int setsNum){
                 lines[i] = new line(_waysNum, i);
         }
 }
+
+// cache class destructor.
 cache::~cache(){
         for(int i = 0; i < _setsNum; i++){
                 delete lines[i];
@@ -46,6 +53,9 @@ cache::~cache(){
 }
 
 // ******cache methods*******
+
+// if adress is found in this line, return true (HIT) and update lru.
+// else return false (MISS).
 bool cache::read(int set, int tag){
         line* setLine = lines[set];
         for(int way = 0; way < _waysNum; way++){
@@ -60,6 +70,7 @@ bool cache::read(int set, int tag){
         return false;
 }
 
+// check if cache line is full, or need evict.
 bool cache::isLineFull(int set){
         line* setLine = lines[set];
         for(int way = 0; way < _waysNum; way++){
@@ -70,6 +81,8 @@ bool cache::isLineFull(int set){
         return true;
 }
 
+// choose the way to evict from, according to lru.
+// return true if dirty and need to write back.
 bool cache::evict(int set, int &writeBackTagNum){
         line* setLine = lines[set];
         int wayToEvict = setLine->WayToEvict();
@@ -79,6 +92,7 @@ bool cache::evict(int set, int &writeBackTagNum){
         return dirty;
 }
 
+// insert a new line to the right cache line and update the lru.
 void cache::insert(int set, int tag){
         line* setLine = lines[set];
         for(int way = 0; way < _waysNum; way++){
@@ -90,9 +104,9 @@ void cache::insert(int set, int tag){
                         return;
                 }
         }
-        cout << "sanity check in insert method - NOT TO BE PRINTED" << endl;
 }
 
+// method used only by L1, to write back to L2, and update L2 line lru.
 void cache::writeBack(int set, int tag){
         line* setLine = lines[set];
         int cnt = 0;
@@ -103,11 +117,9 @@ void cache::writeBack(int set, int tag){
                         cnt++;
                 }
         }
-        if(cnt != 1){
-                cout << "bug in writeback - " << cnt << endl;
-        }
 }
 
+// write to cache line. update dirty bit if HIT (return true) or return false (MISS).
 bool cache::write(int set, int tag){
         line* setLine = lines[set];
         for(int way = 0; way < _waysNum; way++){
@@ -120,18 +132,8 @@ bool cache::write(int set, int tag){
         return false;
 }
 
-bool cache::isExist(int set, int tag){
-        line* setLine = lines[set];
-        for(int way = 0; way < _waysNum; way++){
-                if(setLine->waysVec[way].second){ // is valid
-                        if (setLine->waysVec[way].first.first == tag){ // compare to tag
-                                return true;
-                        } 
-                }
-        }
-        return false;
-}
-
+// method used by L1, to snoop adress given by L2 in case of eviction.
+// in case found in L1 - valid bit is set to 0 in L1 line.
 void cache::snoop(int set, int tag){
         line* setLine = lines[set];
         for(int way = 0; way < _waysNum; way++){    
@@ -142,15 +144,16 @@ void cache::snoop(int set, int tag){
                 }
         }
 }
-// ******cache methods*******
+// ******end cache methods*******
 
 
-
+// calculate the number of sets in each cache.
 int calcSize(int cacheSize, int blockSize, int waysNum){
         int setsNum = 1 << (cacheSize - blockSize - waysNum);
         return setsNum;
 }
 
+// calculate the number of bits that represent num.
 int BitCalc(int num){
         int cnt = 0;
         while(num != 1){
