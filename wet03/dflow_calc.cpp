@@ -93,7 +93,7 @@ int getProgDepth(ProgCtx ctx) {
     vector<node*>* myGraph = (vector<node*>*)ctx;
     int maxDepth = 0;
     for(unsigned int i = 0; i < myGraph->size(); i++){
-        if(((*myGraph)[i]->weightSum > maxDepth) && ((*myGraph)[i]->isExit == true)){
+        if(((*myGraph)[i]->weightSum + (*myGraph)[i]->weight > maxDepth) && ((*myGraph)[i]->isExit == true)){
             maxDepth = (*myGraph)[i]->weightSum + (*myGraph)[i]->weight;
         }
     }
