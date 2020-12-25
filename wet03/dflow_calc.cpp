@@ -10,7 +10,7 @@ class node
 {
 public:
     node(int, int);
-    ~node();
+    ~node(){};
     int index; // who am I
     int src1; //dependent 1
     int src2; //dependent 2
@@ -29,8 +29,6 @@ node::node(int _index, int _weight) {
     isExit = true;
 }
 
-node::~node(){}
-
 void updateNode (node&, node&, int);
 
 ProgCtx analyzeProg(const unsigned int opsLatency[], const InstInfo progTrace[], unsigned int numOfInsts) {
@@ -38,19 +36,19 @@ ProgCtx analyzeProg(const unsigned int opsLatency[], const InstInfo progTrace[],
     node* entry = new node(0, 0);
     entry->isExit = false;
     myGraph->push_back(entry);
-    for (unsigned int i = 1; i < numOfInsts + 1; i++) {
-        node* newNode = new node(i, opsLatency[progTrace->opcode]);
+    for (unsigned int i = 0; i < numOfInsts; i++) {
+        node* newNode = new node(i+1, opsLatency[progTrace[i].opcode]);
         myGraph->push_back(newNode);
     }
     
-    for (unsigned int i = 1; i < numOfInsts + 1; i++) {
+    for (unsigned int i = 0; i < numOfInsts; i++) {
         unsigned int writeToReg = progTrace[i].dstIdx;
-        for (unsigned int j = i + 1; j < numOfInsts + 1; j++) {
+        for (unsigned int j = i + 1; j < numOfInsts; j++) {
             if(progTrace[j].src1Idx == writeToReg){ // check dependency
-                updateNode(*(*myGraph)[j], *(*myGraph)[i], 1);
+                updateNode(*(*myGraph)[j+1], *(*myGraph)[i+1], 1);
             }
             if(progTrace[j].src2Idx == writeToReg){    
-                updateNode(*(*myGraph)[j], *(*myGraph)[i], 2);
+                updateNode(*(*myGraph)[j+1], *(*myGraph)[i+1], 2);
             }
             if(progTrace[j].dstIdx == (int)writeToReg) { 
                 break;
@@ -72,13 +70,22 @@ void freeProgCtx(ProgCtx ctx) {
 
 int getInstDepth(ProgCtx ctx, unsigned int theInst) {
     vector<node*>* myGraph = (vector<node*>*)ctx;
-    return (*myGraph)[theInst]->weightSum;
+    return (*myGraph)[theInst+1]->weightSum;
 }
 
 int getInstDeps(ProgCtx ctx, unsigned int theInst, int *src1DepInst, int *src2DepInst) {
     vector<node*>* myGraph = (vector<node*>*)ctx;
-    *src1DepInst = (*myGraph)[theInst]->src1;
-    *src2DepInst = (*myGraph)[theInst]->src2;
+    if((*myGraph)[theInst+1]->src1 == -1){
+        *src1DepInst = -1;
+    } else {
+        *src1DepInst = (*myGraph)[theInst+1]->src1-1;
+    }
+    if((*myGraph)[theInst+1]->src2 == -1){
+        *src2DepInst = -1;
+    } else {
+        *src2DepInst = (*myGraph)[theInst+1]->src2-1;
+    }
+
     return 0; // TODO: check if need to return faliure.
 }
 
@@ -87,7 +94,7 @@ int getProgDepth(ProgCtx ctx) {
     int maxDepth = 0;
     for(unsigned int i = 0; i < myGraph->size(); i++){
         if(((*myGraph)[i]->weightSum > maxDepth) && ((*myGraph)[i]->isExit == true)){
-            maxDepth = (*myGraph)[i]->weightSum;
+            maxDepth = (*myGraph)[i]->weightSum + (*myGraph)[i]->weight;
         }
     }
     return maxDepth;
