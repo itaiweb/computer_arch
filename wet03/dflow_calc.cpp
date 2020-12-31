@@ -6,6 +6,7 @@
 
 using namespace std;
 
+// class representing a single node in the dependency tree.
 class node
 {
 public:
@@ -31,6 +32,7 @@ node::node(int _index, int _weight) {
 
 void updateNode (node&, node&, int);
 
+// create dependency tree, and save all relevant data.
 ProgCtx analyzeProg(const unsigned int opsLatency[], const InstInfo progTrace[], unsigned int numOfInsts) {
     vector<node*>* myGraph = new vector<node*>;
     node* entry = new node(0, 0);
@@ -50,6 +52,7 @@ ProgCtx analyzeProg(const unsigned int opsLatency[], const InstInfo progTrace[],
             if(progTrace[j].src2Idx == writeToReg){    
                 updateNode(*(*myGraph)[j+1], *(*myGraph)[i+1], 2);
             }
+            // stop the dependency check for certain register if it was written to again.
             if(progTrace[j].dstIdx == (int)writeToReg) { 
                 break;
             }
@@ -57,8 +60,6 @@ ProgCtx analyzeProg(const unsigned int opsLatency[], const InstInfo progTrace[],
     }
 
     return (void*)myGraph;
-
-    //return PROG_CTX_NULL;
 }
 
 void freeProgCtx(ProgCtx ctx) {
@@ -70,11 +71,18 @@ void freeProgCtx(ProgCtx ctx) {
 
 int getInstDepth(ProgCtx ctx, unsigned int theInst) {
     vector<node*>* myGraph = (vector<node*>*)ctx;
+    if((theInst > (myGraph->size() -1)) || theInst < 0){
+        return -1;
+    }
     return (*myGraph)[theInst+1]->weightSum;
 }
 
 int getInstDeps(ProgCtx ctx, unsigned int theInst, int *src1DepInst, int *src2DepInst) {
     vector<node*>* myGraph = (vector<node*>*)ctx;
+    if((theInst > (myGraph->size() -1)) || theInst < 0){
+        return -1;
+    }
+    // +1 offset because entry is in 0.
     if((*myGraph)[theInst+1]->src1 == -1){
         *src1DepInst = -1;
     } else {
@@ -86,7 +94,7 @@ int getInstDeps(ProgCtx ctx, unsigned int theInst, int *src1DepInst, int *src2De
         *src2DepInst = (*myGraph)[theInst+1]->src2-1;
     }
 
-    return 0; // TODO: check if need to return faliure.
+    return 0;
 }
 
 int getProgDepth(ProgCtx ctx) {
