@@ -15,6 +15,7 @@ class thread {
 	int reg[REGS_COUNT];
 	int pc;
 	bool isHalt;
+	bool inQ;
 	int waiting;
 };
 
@@ -31,7 +32,7 @@ class simulator{
 	int threadsNum;
 	int haltNum;
 	void runInst(thread*);
-	void contextSwitch(thread*);
+	thread* contextSwitch(thread*);
 	void nxtCycle();
 };
 
@@ -46,6 +47,7 @@ thread::thread(int _idx){
 	pc = 0;
 	isHalt = false;
 	waiting = 0;
+	inQ = false;
 }
 
 /*
@@ -57,6 +59,7 @@ simulator::simulator(){
 	for(int i = 0; i < threadsNum; i++){
 		threads.push_back(thread(i));
 		readyQ.push(i);
+		threads[i].inQ = true;
 	}
 	numOfCycles = 0;
 	instNum = 0;
@@ -66,8 +69,10 @@ simulator::simulator(){
 
 }
 void simulator::runInst(thread* thread){
+	instNum++;
 	Instruction inst;
 	SIM_MemInstRead(thread->pc, &inst, thread->idx);
+	thread->pc++;
 	switch (inst.opcode)
 	{
 	case CMD_NOP:
@@ -85,6 +90,7 @@ void simulator::runInst(thread* thread){
 	    	thread->reg[inst.dst_index] = thread->reg[inst.src1_index] - inst.src2_index_imm;
 	    	break;
     	case CMD_LOAD:    // dst <- Mem[src1 + src2]  (src2 may be an immediate)
+	    	thread->waiting = loadLatency;
 	    	if(inst.isSrc2Imm){
 			int32_t dst;
 			SIM_MemDataRead(thread->reg[inst.src1_index] + inst.src2_index_imm, &dst);
@@ -96,6 +102,7 @@ void simulator::runInst(thread* thread){
 		}
 	    	break;
     	case CMD_STORE:   // Mem[dst + src2] <- src1  (src2 may be an immediate)
+	    	thread->waiting = storeLatency;
 	    	if(inst.isSrc2Imm){
 			int32_t dst = thread->reg[inst.dst_index];
 			SIM_MemDataWrite(dst + inst.src2_index_imm, thread->reg[inst.src1_index]);
@@ -114,11 +121,41 @@ void simulator::runInst(thread* thread){
 
 }
 
-void simulator::contextSwitch(thread* runningThread){
-
+thread* simulator::contextSwitch(thread* runningThread){
+	if(runningThread->isHalt){
+		if(readyQ.empty() == false){
+			runningThread = &(threads[readyQ.front()]); // BUG: cant change pointer!!
+			readyQ.pop();
+		}
+	}else{
+		if(runningThread->waiting == 0 || readyQ.empty()){
+			// this->nxtCycle();
+			return runningThread;
+		}
+		runningThread = &(threads[readyQ.front()]);
+		readyQ.pop();
+	}
+	for(int i = 0; i < switchOverhead; i++){
+		this->nxtCycle();
+	}
+	runningThread->inQ = false;
+	return runningThread;
 }
 
 void simulator::nxtCycle(){
+	numOfCycles++;
+	for (int i = 0; i < threadsNum; i++){
+		if(threads[i].isHalt){
+			continue;
+		}
+		else if(threads[i].waiting){
+			threads[i].waiting--;
+		}
+		else if((threads[i].waiting == 0) && (threads[i].inQ == false)){
+			readyQ.push(i);
+			threads[i].inQ = true;
+		}
+	}
 
 }
 
@@ -135,17 +172,19 @@ void CORE_BlockedMT() {
 	if(blockedMT->readyQ.empty() == false){
 		runningThread = &(blockedMT->threads[blockedMT->readyQ.front()]);
 		blockedMT->readyQ.pop();
+		runningThread->inQ = false;
 	}
-
 	while(blockedMT->threadsNum != blockedMT->haltNum){
 		while(blockedMT->readyQ.empty() == false){
 			if(isFirst == false){
-				blockedMT->contextSwitch(runningThread); // switch only if current waiting != 0
-				blockedMT->nxtCycle();
+				runningThread = blockedMT->contextSwitch(runningThread); // switch only if current waiting != 0
 			}
 			isFirst = false;
 			while(!(runningThread->waiting)){
 				blockedMT->runInst(runningThread);
+				if(runningThread->isHalt){
+					break;
+				}
 				blockedMT->nxtCycle();
 			}
 		}
@@ -155,30 +194,42 @@ void CORE_BlockedMT() {
 
 void CORE_FinegrainedMT() {
 	thread* runningThread;
-	blockedMT = new simulator();
-
-	while(blockedMT->threadsNum != blockedMT->haltNum){
-		while(blockedMT->readyQ.empty() == false){
-			runningThread = &(blockedMT->threads[blockedMT->readyQ.front()]);
-			blockedMT->readyQ.pop();
-			blockedMT->runInst(runningThread);
-			blockedMT->nxtCycle();
+	finegrain = new simulator();
+	while(finegrain->threadsNum != finegrain->haltNum){
+		while(finegrain->readyQ.empty() == false){
+			runningThread = &(finegrain->threads[finegrain->readyQ.front()]);
+			finegrain->readyQ.pop();
+			runningThread->inQ = false;
+			finegrain->runInst(runningThread);
+			finegrain->nxtCycle();
 		}
-		blockedMT->nxtCycle(); //adding to queue by minimum thread idx
+		finegrain->nxtCycle(); //adding to queue by minimum thread idx
 	}
 }
 
 double CORE_BlockedMT_CPI(){
-
-	return 0;
+	double totInst = blockedMT->instNum;
+	double totCycles = blockedMT->numOfCycles;
+	delete blockedMT;
+	return (totCycles / totInst);
 }
 
 double CORE_FinegrainedMT_CPI(){
-	return 0;
+	double totInst = finegrain->instNum;
+	double totCycles = finegrain->numOfCycles;
+	delete finegrain;
+	return (totCycles / totInst);
 }
 
 void CORE_BlockedMT_CTX(tcontext* context, int threadid) {
+	for(int i = 0; i < REGS_COUNT; i++){
+		context->reg[i] = blockedMT->threads[threadid].reg[i];
+	}
 }
 
 void CORE_FinegrainedMT_CTX(tcontext* context, int threadid) {
+	for(int i = 0; i < REGS_COUNT; i++){
+		context->reg[i] = finegrain->threads[threadid].reg[i];
+	}
+
 }
