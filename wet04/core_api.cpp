@@ -4,6 +4,9 @@
 #include "sim_api.h"
 #include <vector>
 #include <queue>
+#include <iostream>
+#define FINE 0
+#define BLOCKED 1
 
 #include <stdio.h>
 using namespace std;
@@ -21,9 +24,9 @@ class thread {
 
 class simulator{
 	public:
-	simulator();
+	simulator(int);
 	vector<thread> threads;
-	queue<int> readyQ;
+	int type;
 	int numOfCycles;
 	int instNum;
 	int loadLatency;
@@ -33,6 +36,7 @@ class simulator{
 	int haltNum;
 	void runInst(thread*);
 	thread* contextSwitch(thread*);
+	bool findAvailableThread();
 	void nxtCycle();
 };
 
@@ -47,26 +51,28 @@ thread::thread(int _idx){
 	pc = 0;
 	isHalt = false;
 	waiting = 0;
-	inQ = false;
 }
 
 /*
 SIMULATOR methods
 */
-simulator::simulator(){
+simulator::simulator(int _type){
+	type = _type;
 	threadsNum = SIM_GetThreadsNum();
 	haltNum = 0;
 	for(int i = 0; i < threadsNum; i++){
 		threads.push_back(thread(i));
-		readyQ.push(i);
-		threads[i].inQ = true;
 	}
 	numOfCycles = 0;
 	instNum = 0;
 	loadLatency = SIM_GetLoadLat();
 	storeLatency = SIM_GetStoreLat();
-	switchOverhead = SIM_GetSwitchCycles();
-
+	if(type == BLOCKED){
+		switchOverhead = SIM_GetSwitchCycles();
+	}else
+	{
+		switchOverhead = 0;
+	}
 }
 void simulator::runInst(thread* thread){
 	instNum++;
@@ -90,7 +96,7 @@ void simulator::runInst(thread* thread){
 	    	thread->reg[inst.dst_index] = thread->reg[inst.src1_index] - inst.src2_index_imm;
 	    	break;
     	case CMD_LOAD:    // dst <- Mem[src1 + src2]  (src2 may be an immediate)
-	    	thread->waiting = loadLatency;
+	    	thread->waiting = loadLatency + 1;
 	    	if(inst.isSrc2Imm){
 			int32_t dst;
 			SIM_MemDataRead(thread->reg[inst.src1_index] + inst.src2_index_imm, &dst);
@@ -102,7 +108,7 @@ void simulator::runInst(thread* thread){
 		}
 	    	break;
     	case CMD_STORE:   // Mem[dst + src2] <- src1  (src2 may be an immediate)
-	    	thread->waiting = storeLatency;
+	    	thread->waiting = storeLatency + 1;
 	    	if(inst.isSrc2Imm){
 			int32_t dst = thread->reg[inst.dst_index];
 			SIM_MemDataWrite(dst + inst.src2_index_imm, thread->reg[inst.src1_index]);
@@ -122,41 +128,49 @@ void simulator::runInst(thread* thread){
 }
 
 thread* simulator::contextSwitch(thread* runningThread){
-	if(runningThread->isHalt){
-		if(readyQ.empty() == false){
-			runningThread = &(threads[readyQ.front()]); // BUG: cant change pointer!!
-			readyQ.pop();
+	if(runningThread->waiting == 0 && runningThread->isHalt == false && type == BLOCKED){
+		return runningThread;
+	}
+	int nxtThread = (runningThread->idx + 1) % threadsNum;
+	for(int i = 0; i < threadsNum; i++){
+		if(threads[nxtThread].waiting == 0 && threads[nxtThread].isHalt == false){
+			runningThread =  &(threads[nxtThread]); // choosing a thread to run next instruction
+			break;
 		}
-	}else{
-		if(runningThread->waiting == 0 || readyQ.empty()){
-			// this->nxtCycle();
-			return runningThread;
+		nxtThread = (1 + nxtThread) % threadsNum;
+		if(i == threadsNum - 1 && type == FINE){
+			cout << "should never be printed - contextSwitch" << endl;
 		}
-		runningThread = &(threads[readyQ.front()]);
-		readyQ.pop();
 	}
 	for(int i = 0; i < switchOverhead; i++){
-		this->nxtCycle();
+		this->nxtCycle(); // context switch overhead
 	}
-	runningThread->inQ = false;
 	return runningThread;
 }
 
 void simulator::nxtCycle(){
 	numOfCycles++;
-	for (int i = 0; i < threadsNum; i++){
-		if(threads[i].isHalt){
-			continue;
-		}
-		else if(threads[i].waiting){
+	for(int i = 0; i < threadsNum; i++){
+		if(threads[i].waiting){
 			threads[i].waiting--;
 		}
-		else if((threads[i].waiting == 0) && (threads[i].inQ == false)){
-			readyQ.push(i);
-			threads[i].inQ = true;
-		}
 	}
+}
 
+bool simulator::findAvailableThread(){
+	if(threadsNum == haltNum){
+		return false;
+	}
+	while(true){
+		for(int i = 0; i < threadsNum; i++){
+			if(threads[i].waiting == 0 && threads[i].isHalt == false){
+				return true;
+			}
+		}
+		this->nxtCycle(); // idle
+	}
+	cout << "should never be printed - findAvailableThread" << endl;
+	return true;
 }
 
 simulator* blockedMT = NULL;
@@ -166,45 +180,35 @@ simulator* finegrain = NULL;
 
 
 void CORE_BlockedMT() {
-	bool isFirst = true;
-	thread* runningThread;
-	blockedMT = new simulator();
-	if(blockedMT->readyQ.empty() == false){
-		runningThread = &(blockedMT->threads[blockedMT->readyQ.front()]);
-		blockedMT->readyQ.pop();
-		runningThread->inQ = false;
-	}
+	blockedMT = new simulator(BLOCKED);
+	thread* runningThread = &(blockedMT->threads[0]); // first thread in the thilat olam
 	while(blockedMT->threadsNum != blockedMT->haltNum){
-		while(blockedMT->readyQ.empty() == false){
-			if(isFirst == false){
-				runningThread = blockedMT->contextSwitch(runningThread); // switch only if current waiting != 0
-			}
-			isFirst = false;
-			while(!(runningThread->waiting)){
-				blockedMT->runInst(runningThread);
-				if(runningThread->isHalt){
-					break;
-				}
-				blockedMT->nxtCycle();
+		while(runningThread->waiting == 0){
+			blockedMT->runInst(runningThread);
+			blockedMT->nxtCycle(); // nxtCycle is decreasing waiting and it should not do so.
+			if(runningThread->isHalt){
+				break;
 			}
 		}
-		blockedMT->nxtCycle();
+		if(blockedMT->findAvailableThread() == false){
+			break;
+		}
+		runningThread = blockedMT->contextSwitch(runningThread);
 	}
 }
 
-void CORE_FinegrainedMT() {
-	thread* runningThread;
-	finegrain = new simulator();
+void CORE_FinegrainedMT() { 
+	finegrain = new simulator(FINE);
+	thread* runningThread = &(finegrain->threads[0]);
 	while(finegrain->threadsNum != finegrain->haltNum){
-		while(finegrain->readyQ.empty() == false){
-			runningThread = &(finegrain->threads[finegrain->readyQ.front()]);
-			finegrain->readyQ.pop();
-			runningThread->inQ = false;
-			finegrain->runInst(runningThread);
-			finegrain->nxtCycle();
+		finegrain->runInst(runningThread);
+		finegrain->nxtCycle();
+		if(finegrain->findAvailableThread() == false){
+			break;
 		}
-		finegrain->nxtCycle(); //adding to queue by minimum thread idx
+		runningThread = finegrain->contextSwitch(runningThread);
 	}
+
 }
 
 double CORE_BlockedMT_CPI(){
@@ -223,13 +227,12 @@ double CORE_FinegrainedMT_CPI(){
 
 void CORE_BlockedMT_CTX(tcontext* context, int threadid) {
 	for(int i = 0; i < REGS_COUNT; i++){
-		context->reg[i] = blockedMT->threads[threadid].reg[i];
+		context[threadid].reg[i] = blockedMT->threads[threadid].reg[i];
 	}
 }
 
 void CORE_FinegrainedMT_CTX(tcontext* context, int threadid) {
 	for(int i = 0; i < REGS_COUNT; i++){
-		context->reg[i] = finegrain->threads[threadid].reg[i];
+		context[threadid].reg[i] = finegrain->threads[threadid].reg[i];
 	}
-
 }
