@@ -3,12 +3,10 @@
 #include "core_api.h"
 #include "sim_api.h"
 #include <vector>
-#include <queue>
 #include <iostream>
 #define FINE 0
 #define BLOCKED 1
 
-#include <stdio.h>
 using namespace std;
 
 class thread {
@@ -18,7 +16,6 @@ class thread {
 	int reg[REGS_COUNT];
 	int pc;
 	bool isHalt;
-	bool inQ;
 	int waiting;
 };
 
@@ -33,7 +30,7 @@ class simulator{
 	int storeLatency;
 	int switchOverhead;
 	int threadsNum;
-	int haltNum;
+	int haltNum; //number of threads in halt
 	void runInst(thread*);
 	thread* contextSwitch(thread*);
 	bool findAvailableThread();
@@ -74,6 +71,13 @@ simulator::simulator(int _type){
 		switchOverhead = 0;
 	}
 }
+
+//////////////////////////////////////////////////////////////////////////
+// Method name: runInst
+// description: run instruction given a currently running thread 
+// inputs: 	thread - current thread
+// outputs: 	none	  
+//////////////////////////////////////////////////////////////////////////
 void simulator::runInst(thread* thread){
 	instNum++;
 	Instruction inst;
@@ -124,9 +128,14 @@ void simulator::runInst(thread* thread){
 	default:
 		break;
 	}
-
 }
 
+//////////////////////////////////////////////////////////////////////////
+// Method name: contextSwitch
+// description: choose the next thread to run, and advance the needed number of cycles according to the overhead.
+// inputs: 	runningThread - current thread to replace
+// outputs: 	the new (or not) chosen thread 	  
+//////////////////////////////////////////////////////////////////////////
 thread* simulator::contextSwitch(thread* runningThread){
 	if(runningThread->waiting == 0 && runningThread->isHalt == false && type == BLOCKED){
 		return runningThread;
@@ -138,9 +147,6 @@ thread* simulator::contextSwitch(thread* runningThread){
 			break;
 		}
 		nxtThread = (1 + nxtThread) % threadsNum;
-		if(i == threadsNum - 1 && type == FINE){
-			cout << "should never be printed - contextSwitch" << endl;
-		}
 	}
 	for(int i = 0; i < switchOverhead; i++){
 		this->nxtCycle(); // context switch overhead
@@ -148,6 +154,11 @@ thread* simulator::contextSwitch(thread* runningThread){
 	return runningThread;
 }
 
+//////////////////////////////////////////////////////////////////////////
+// Method name: nxtCycle
+// description: advance one cycle.
+// outputs: 	none	  
+//////////////////////////////////////////////////////////////////////////
 void simulator::nxtCycle(){
 	numOfCycles++;
 	for(int i = 0; i < threadsNum; i++){
@@ -157,6 +168,11 @@ void simulator::nxtCycle(){
 	}
 }
 
+//////////////////////////////////////////////////////////////////////////
+// Method name: findAvailableThread
+// description: find if there is an available thread. if not, run idle.
+// outputs: 	none	  
+//////////////////////////////////////////////////////////////////////////
 bool simulator::findAvailableThread(){
 	if(threadsNum == haltNum){
 		return false;
@@ -169,23 +185,21 @@ bool simulator::findAvailableThread(){
 		}
 		this->nxtCycle(); // idle
 	}
-	cout << "should never be printed - findAvailableThread" << endl;
 	return true;
 }
+/* ########################## END ########################## */
+
 
 simulator* blockedMT = NULL;
 simulator* finegrain = NULL;
 
-
-
-
 void CORE_BlockedMT() {
 	blockedMT = new simulator(BLOCKED);
-	thread* runningThread = &(blockedMT->threads[0]); // first thread in the thilat olam
+	thread* runningThread = &(blockedMT->threads[0]);
 	while(blockedMT->threadsNum != blockedMT->haltNum){
 		while(runningThread->waiting == 0){
 			blockedMT->runInst(runningThread);
-			blockedMT->nxtCycle(); // nxtCycle is decreasing waiting and it should not do so.
+			blockedMT->nxtCycle();
 			if(runningThread->isHalt){
 				break;
 			}
@@ -208,7 +222,6 @@ void CORE_FinegrainedMT() {
 		}
 		runningThread = finegrain->contextSwitch(runningThread);
 	}
-
 }
 
 double CORE_BlockedMT_CPI(){
